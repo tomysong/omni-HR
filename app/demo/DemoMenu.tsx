@@ -25,7 +25,7 @@ export function DemoMenu() {
   const pathname = usePathname();
 
   return (
-    <aside className="border-b bg-muted/40 p-2 md:w-60 md:border-b-0 md:border-r">
+    <aside className="border-b bg-muted/40 p-2 md:border-b-0 md:border-r">
       <nav className="flex gap-2 overflow-x-auto md:h-full md:max-h-screen md:flex-col md:overflow-visible">
         {demoMenuItems.map((item) => {
           const Icon = item.icon;

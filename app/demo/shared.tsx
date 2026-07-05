@@ -129,9 +129,9 @@ export function DemoShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen w-full flex-col md:flex-row">
+    <div className="flex min-h-screen w-full flex-col md:grid md:grid-cols-[15rem_minmax(0,1fr)]">
       <DemoMenu />
-      <main className="flex min-h-screen grow flex-col bg-background">
+      <main className="flex min-h-screen min-w-0 flex-col bg-background">
         <header className="flex flex-col gap-4 border-b px-4 py-4 md:flex-row md:items-center md:justify-between md:px-6">
           <div>
             <p className="text-sm text-muted-foreground">연차·대체휴무 관리</p>

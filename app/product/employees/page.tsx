@@ -2,7 +2,7 @@
 
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { Building2, ShieldCheck, UserPlus, Users } from "lucide-react";
+import { Building2, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -40,10 +40,12 @@ export default function EmployeesPage() {
   >("active");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [isClearingDemo, setIsClearingDemo] = useState(false);
 
   const workspace = useQuery(api.leave.workspace, { today });
   const createEmployeeProfile = useMutation(api.leave.createEmployeeProfile);
   const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
+  const clearDemoData = useMutation(api.leave.clearDemoData);
 
   const handleSeed = async () => {
     setIsSeeding(true);
@@ -51,6 +53,29 @@ export default function EmployeesPage() {
       await ensureDemoWorkspace({ today });
     } finally {
       setIsSeeding(false);
+    }
+  };
+
+  const handleClearDemoData = async () => {
+    if (
+      !window.confirm(
+        "데모/테스트 직원(김민지, 박준호)과 관련 연차·대체휴무·신청 기록을 삭제합니다. 계속할까요?",
+      )
+    ) {
+      return;
+    }
+    setIsClearingDemo(true);
+    try {
+      const result = await clearDemoData({});
+      toast.success(
+        `데모 데이터 삭제 완료 (직원 ${result.removedEmployees}명, 관련 기록 ${result.removedRecords}건)`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "데모 데이터 삭제에 실패했습니다.",
+      );
+    } finally {
+      setIsClearingDemo(false);
     }
   };
 
@@ -92,6 +117,10 @@ export default function EmployeesPage() {
   if (workspace === undefined) {
     return <LoadingState />;
   }
+
+  const hasDemoData = workspace.employees.some((employee) =>
+    ["EMP-001", "EMP-002"].includes(employee.employeeNo),
+  );
 
   const activeEmployees = workspace.employees.filter(
     (employee) => employee.employmentStatus === "active",
@@ -135,7 +164,7 @@ export default function EmployeesPage() {
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <Card>
           <CardHeader>
             <CardTitle>직원 등록</CardTitle>
@@ -254,11 +283,24 @@ export default function EmployeesPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>직원 목록</CardTitle>
-            <CardDescription>
-              활성 직원이 먼저 보이고, 잔여 정보도 함께 확인합니다.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <div>
+              <CardTitle>직원 목록</CardTitle>
+              <CardDescription>
+                활성 직원이 먼저 보이고, 잔여 정보도 함께 확인합니다.
+              </CardDescription>
+            </div>
+            {canManage && hasDemoData ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearDemoData}
+                disabled={isClearingDemo}
+              >
+                <Trash2 className="h-4 w-4" />
+                {isClearingDemo ? "삭제 중" : "데모/테스트 데이터 삭제"}
+              </Button>
+            ) : null}
           </CardHeader>
           <CardContent>
             {workspace.employees.length === 0 ? (

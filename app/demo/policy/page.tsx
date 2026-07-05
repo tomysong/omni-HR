@@ -9,7 +9,7 @@ export default function DemoPolicyPage() {
   return (
     <DemoShell title="정책">
       <PolicyMetrics />
-      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <DemoPolicyForm />
         <DemoPolicyPanel />
       </section>

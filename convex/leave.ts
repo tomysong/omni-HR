@@ -452,6 +452,84 @@ export const ensureDemoWorkspace = mutation({
   },
 });
 
+const DEMO_EMPLOYEE_NOS = ["EMP-001", "EMP-002"] as const;
+
+export const clearDemoData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { userId } = await requireViewer(ctx);
+    const viewerProfile = await profileForUser(ctx, userId);
+    if (!canManage(viewerProfile)) {
+      throw new Error("관리자만 데모 데이터를 삭제할 수 있습니다.");
+    }
+
+    let removedEmployees = 0;
+    let removedRecords = 0;
+
+    for (const employeeNo of DEMO_EMPLOYEE_NOS) {
+      const employee = await ctx.db
+        .query("employeeProfiles")
+        .filter((q) => q.eq(q.field("employeeNo"), employeeNo))
+        .first();
+      if (employee === null) {
+        continue;
+      }
+
+      const [grants, credits, requests] = await Promise.all([
+        ctx.db
+          .query("leaveGrants")
+          .withIndex("by_employee", (q) =>
+            q.eq("employeeProfileId", employee._id),
+          )
+          .collect(),
+        ctx.db
+          .query("compensatoryCredits")
+          .withIndex("by_employee", (q) =>
+            q.eq("employeeProfileId", employee._id),
+          )
+          .collect(),
+        ctx.db
+          .query("leaveRequests")
+          .withIndex("by_employee", (q) =>
+            q.eq("employeeProfileId", employee._id),
+          )
+          .collect(),
+      ]);
+
+      for (const record of [...grants, ...credits, ...requests]) {
+        await ctx.db.delete(record._id);
+        removedRecords += 1;
+      }
+
+      await ctx.db.delete(employee._id);
+      removedEmployees += 1;
+    }
+
+    const demoAudits = await ctx.db
+      .query("auditLogs")
+      .withIndex("by_entity", (q) =>
+        q.eq("entityTable", "workspace").eq("entityId", "demo"),
+      )
+      .collect();
+    for (const entry of demoAudits) {
+      await ctx.db.delete(entry._id);
+      removedRecords += 1;
+    }
+
+    await logAudit(
+      ctx,
+      viewerProfile!._id,
+      "workspace",
+      "demo",
+      "clearDemoData",
+      undefined,
+      { removedEmployees, removedRecords },
+    );
+
+    return { removedEmployees, removedRecords };
+  },
+});
+
 export const createLeaveRequest = mutation({
   args: {
     type: leaveRequestType,

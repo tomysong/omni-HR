@@ -179,7 +179,7 @@ export function LeaveDashboard() {
         </Card>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>

@@ -151,7 +151,7 @@ export default function PolicyPage() {
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <Card>
           <CardHeader>
             <CardTitle>정책 수정</CardTitle>
