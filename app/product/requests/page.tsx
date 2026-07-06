@@ -34,7 +34,7 @@ const requestDefaults = {
   annual: { amount: "1", unit: "day" as const },
   halfAnnual: { amount: "0.5", unit: "day" as const },
   quarterAnnual: { amount: "0.25", unit: "day" as const },
-  compensatory: { amount: "8", unit: "hour" as const },
+  compensatory: { amount: "1", unit: "day" as const },
   bereavement: { amount: "1", unit: "day" as const },
   sick: { amount: "1", unit: "day" as const },
   official: { amount: "1", unit: "day" as const },
@@ -129,7 +129,7 @@ export default function RequestsPage() {
           title="대체휴무 잔여"
           value={
             workspace.compensatory
-              ? `${workspace.compensatory.remainingHours.toFixed(1)}시간`
+              ? `${workspace.compensatory.remainingDays.toFixed(2)}일`
               : "-"
           }
           detail="적립분 우선 소진 권장"
@@ -210,7 +210,6 @@ export default function RequestsPage() {
                       }
                     >
                       <option value="day">일</option>
-                      <option value="hour">시간</option>
                     </select>
                   </Field>
                 </div>

@@ -163,11 +163,11 @@ async function compensatoryBalance(
     )
     .collect();
 
-  const creditedHours = credits.reduce(
-    (sum, credit) => sum + credit.creditedHours,
+  const creditedDays = credits.reduce(
+    (sum, credit) => sum + credit.creditedDays,
     0,
   );
-  const usedHours = credits.reduce((sum, credit) => sum + credit.usedHours, 0);
+  const usedDays = credits.reduce((sum, credit) => sum + credit.usedDays, 0);
   const nextExpiry =
     credits
       .map((credit) => credit.expiresOn)
@@ -175,9 +175,9 @@ async function compensatoryBalance(
       .sort((a, b) => a.localeCompare(b))[0] ?? null;
 
   return {
-    creditedHours: round2(creditedHours),
-    usedHours: round2(usedHours),
-    remainingHours: round2(creditedHours - usedHours),
+    creditedDays: round2(creditedDays),
+    usedDays: round2(usedDays),
+    remainingDays: round2(creditedDays - usedDays),
     nextExpiry,
   };
 }
@@ -226,7 +226,7 @@ async function employeeSummary(
     hireDate: employee.hireDate,
     employmentStatus: employee.employmentStatus,
     annualRemainingDays: annual.remainingDays,
-    compensatoryRemainingHours: compensatory.remainingHours,
+    compensatoryRemainingDays: compensatory.remainingDays,
     pendingRequests: requests.filter((request) => request.status === "pending")
       .length,
   };
@@ -387,7 +387,7 @@ export const ensureDemoWorkspace = mutation({
       ctx,
       viewerProfile._id,
       `${year}-06-08`,
-      8,
+      1,
       null,
       now,
     );
@@ -429,7 +429,7 @@ export const ensureDemoWorkspace = mutation({
       `${year}-12-31`,
       now,
     );
-    await ensureCompCredit(ctx, teammateA._id, `${year}-05-18`, 8, null, now);
+    await ensureCompCredit(ctx, teammateA._id, `${year}-05-18`, 1, null, now);
     await ensurePendingRequest(
       ctx,
       teammateA._id,
@@ -558,7 +558,7 @@ export const createLeaveRequest = mutation({
     }
     if (args.type === "compensatory") {
       const balance = await compensatoryBalance(ctx, profile._id);
-      if (args.amount > balance.remainingHours) {
+      if (args.amount > balance.remainingDays) {
         throw new Error("Insufficient compensatory leave balance");
       }
     }
@@ -647,6 +647,98 @@ export const createEmployeeProfile = mutation({
   },
 });
 
+export const setInitialBalance = mutation({
+  args: {
+    employeeProfileId: v.id("employeeProfiles"),
+    annualDays: v.optional(v.number()),
+    compensatoryDays: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { userId } = await requireViewer(ctx);
+    const viewerProfile = await profileForUser(ctx, userId);
+    if (!canManage(viewerProfile)) {
+      throw new Error("Admin role is required");
+    }
+    if (args.annualDays === undefined && args.compensatoryDays === undefined) {
+      throw new Error("연차 또는 대체휴무 중 하나는 입력해야 합니다.");
+    }
+    if (args.annualDays !== undefined && args.annualDays < 0) {
+      throw new Error("연차 일수는 0 이상이어야 합니다.");
+    }
+    if (args.compensatoryDays !== undefined && args.compensatoryDays < 0) {
+      throw new Error("대체휴무 일수는 0 이상이어야 합니다.");
+    }
+
+    const employee = await ctx.db.get(args.employeeProfileId);
+    if (employee === null) {
+      throw new Error("Employee not found");
+    }
+
+    const now = Date.now();
+    const year = new Date(now).getUTCFullYear();
+
+    if (args.annualDays !== undefined) {
+      const existingGrant = await ctx.db
+        .query("leaveGrants")
+        .withIndex("by_employee_year", (q) =>
+          q.eq("employeeProfileId", args.employeeProfileId).eq("year", year),
+        )
+        .first();
+      if (existingGrant !== null) {
+        await ctx.db.patch(existingGrant._id, {
+          grantedDays: args.annualDays,
+          reason: "관리자 초기값 설정",
+          basisSnapshot: "관리자 수동 설정 (이전 시스템 이월분 포함 가능)",
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.insert("leaveGrants", {
+          employeeProfileId: args.employeeProfileId,
+          year,
+          grantedDays: args.annualDays,
+          reason: "관리자 초기값 설정",
+          basisSnapshot: "관리자 수동 설정 (이전 시스템 이월분 포함 가능)",
+          expiresOn: `${year}-12-31`,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    if (args.compensatoryDays !== undefined && args.compensatoryDays > 0) {
+      const policy = await activePolicy(ctx);
+      const expiresOn =
+        policy?.compensatoryExpiryDays != null
+          ? new Date(now + policy.compensatoryExpiryDays * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .slice(0, 10)
+          : null;
+      await ctx.db.insert("compensatoryCredits", {
+        employeeProfileId: args.employeeProfileId,
+        sourceWorkDate: new Date(now).toISOString().slice(0, 10),
+        creditedDays: args.compensatoryDays,
+        usedDays: 0,
+        expiresOn,
+        note: "관리자 초기값 설정 (이전 시스템 이월분)",
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await logAudit(
+      ctx,
+      viewerProfile?._id,
+      "employeeProfiles",
+      args.employeeProfileId,
+      "setInitialBalance",
+      undefined,
+      args,
+    );
+
+    return { ok: true };
+  },
+});
+
 export const updateActivePolicy = mutation({
   args: {
     name: v.string(),
@@ -728,7 +820,7 @@ export const decideRequest = mutation({
     }
 
     if (decision === "approved" && request.type === "compensatory") {
-      await consumeCompensatoryHours(
+      await consumeCompensatoryDays(
         ctx,
         request.employeeProfileId,
         request.amount,
@@ -829,7 +921,7 @@ async function ensureCompCredit(
   ctx: MutationCtx,
   employeeProfileId: Id<"employeeProfiles">,
   sourceWorkDate: string,
-  creditedHours: number,
+  creditedDays: number,
   expiresOn: string | null,
   now: number,
 ) {
@@ -846,10 +938,10 @@ async function ensureCompCredit(
   await ctx.db.insert("compensatoryCredits", {
     employeeProfileId,
     sourceWorkDate,
-    creditedHours,
-    usedHours: 0,
+    creditedDays,
+    usedDays: 0,
     expiresOn,
-    note: "주말/휴일 근무 1:1 적립",
+    note: "주말/휴일 근무 적립",
     createdAt: now,
     updatedAt: now,
   });
@@ -888,12 +980,12 @@ async function ensurePendingRequest(
   });
 }
 
-async function consumeCompensatoryHours(
+async function consumeCompensatoryDays(
   ctx: MutationCtx,
   employeeProfileId: Id<"employeeProfiles">,
-  hours: number,
+  days: number,
 ) {
-  let remaining = hours;
+  let remaining = days;
   const credits = await ctx.db
     .query("compensatoryCredits")
     .withIndex("by_employee", (q) =>
@@ -905,13 +997,13 @@ async function consumeCompensatoryHours(
     if (remaining <= 0) {
       break;
     }
-    const available = credit.creditedHours - credit.usedHours;
+    const available = credit.creditedDays - credit.usedDays;
     if (available <= 0) {
       continue;
     }
     const toUse = Math.min(available, remaining);
     await ctx.db.patch(credit._id, {
-      usedHours: round2(credit.usedHours + toUse),
+      usedDays: round2(credit.usedDays + toUse),
       updatedAt: Date.now(),
     });
     remaining = round2(remaining - toUse);

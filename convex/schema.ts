@@ -57,8 +57,8 @@ export default defineSchema({
   compensatoryCredits: defineTable({
     employeeProfileId: v.id("employeeProfiles"),
     sourceWorkDate: v.string(),
-    creditedHours: v.number(),
-    usedHours: v.number(),
+    creditedDays: v.number(),
+    usedDays: v.number(),
     expiresOn: v.union(v.string(), v.null()),
     note: v.optional(v.string()),
     createdAt: v.number(),

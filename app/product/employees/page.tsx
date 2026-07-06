@@ -1,9 +1,17 @@
 "use client";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { Building2, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
-import { FormEvent, useState } from "react";
+import {
+  Building2,
+  ShieldCheck,
+  Settings2,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { Fragment, FormEvent, useState } from "react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,11 +49,54 @@ export default function EmployeesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isClearingDemo, setIsClearingDemo] = useState(false);
+  const [balanceEditId, setBalanceEditId] =
+    useState<Id<"employeeProfiles"> | null>(null);
+  const [annualInput, setAnnualInput] = useState("");
+  const [compInput, setCompInput] = useState("");
+  const [isSavingBalance, setIsSavingBalance] = useState(false);
 
   const workspace = useQuery(api.leave.workspace, { today });
   const createEmployeeProfile = useMutation(api.leave.createEmployeeProfile);
   const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
   const clearDemoData = useMutation(api.leave.clearDemoData);
+  const setInitialBalance = useMutation(api.leave.setInitialBalance);
+
+  const openBalanceEdit = (employeeId: Id<"employeeProfiles">) => {
+    setBalanceEditId(employeeId);
+    setAnnualInput("");
+    setCompInput("");
+  };
+
+  const closeBalanceEdit = () => {
+    setBalanceEditId(null);
+    setAnnualInput("");
+    setCompInput("");
+  };
+
+  const handleSaveBalance = async () => {
+    if (balanceEditId === null) return;
+    if (annualInput.trim() === "" && compInput.trim() === "") {
+      toast.error("연차 또는 대체휴무 중 하나는 입력해야 합니다.");
+      return;
+    }
+    setIsSavingBalance(true);
+    try {
+      await setInitialBalance({
+        employeeProfileId: balanceEditId,
+        annualDays: annualInput.trim() === "" ? undefined : Number(annualInput),
+        compensatoryDays:
+          compInput.trim() === "" ? undefined : Number(compInput),
+      });
+      toast.success("초기 잔여를 설정했습니다.");
+      closeBalanceEdit();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "초기값 설정에 실패했습니다.",
+      );
+    } finally {
+      setIsSavingBalance(false);
+    }
+  };
 
   const handleSeed = async () => {
     setIsSeeding(true);
@@ -317,30 +368,104 @@ export default function EmployeesPage() {
                       <th className="py-2 font-medium">연차</th>
                       <th className="py-2 font-medium">대체휴무</th>
                       <th className="py-2 font-medium">상태</th>
+                      {canManage ? (
+                        <th className="py-2 text-right font-medium">관리</th>
+                      ) : null}
                     </tr>
                   </thead>
                   <tbody>
                     {workspace.employees.map((employee) => (
-                      <tr key={employee._id} className="border-b last:border-0">
-                        <td className="py-3 font-mono text-xs">
-                          {employee.employeeNo}
-                        </td>
-                        <td className="py-3">
-                          <div className="font-medium">{employee.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {employee.title || "-"}
-                          </div>
-                        </td>
-                        <td className="py-3">{employee.department}</td>
-                        <td className="py-3">{employee.role}</td>
-                        <td className="py-3">
-                          {employee.annualRemainingDays.toFixed(2)}일
-                        </td>
-                        <td className="py-3">
-                          {employee.compensatoryRemainingHours.toFixed(1)}시간
-                        </td>
-                        <td className="py-3">{employee.employmentStatus}</td>
-                      </tr>
+                      <Fragment key={employee._id}>
+                        <tr className="border-b last:border-0">
+                          <td className="py-3 font-mono text-xs">
+                            {employee.employeeNo}
+                          </td>
+                          <td className="py-3">
+                            <div className="font-medium">{employee.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {employee.title || "-"}
+                            </div>
+                          </td>
+                          <td className="py-3">{employee.department}</td>
+                          <td className="py-3">{employee.role}</td>
+                          <td className="py-3">
+                            {employee.annualRemainingDays.toFixed(2)}일
+                          </td>
+                          <td className="py-3">
+                            {employee.compensatoryRemainingDays.toFixed(2)}일
+                          </td>
+                          <td className="py-3">{employee.employmentStatus}</td>
+                          {canManage ? (
+                            <td className="py-3 text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  balanceEditId === employee._id
+                                    ? closeBalanceEdit()
+                                    : openBalanceEdit(employee._id)
+                                }
+                              >
+                                <Settings2 className="h-4 w-4" />
+                                초기값 설정
+                              </Button>
+                            </td>
+                          ) : null}
+                        </tr>
+                        {canManage && balanceEditId === employee._id ? (
+                          <tr className="border-b bg-muted/30 last:border-0">
+                            <td colSpan={8} className="py-3">
+                              <div className="flex flex-wrap items-end gap-3">
+                                <Field label="연차 초기 일수">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    className="w-32"
+                                    value={annualInput}
+                                    onChange={(event) =>
+                                      setAnnualInput(event.target.value)
+                                    }
+                                    placeholder={employee.annualRemainingDays.toFixed(
+                                      2,
+                                    )}
+                                  />
+                                </Field>
+                                <Field label="대체휴무 초기 일수">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    className="w-32"
+                                    value={compInput}
+                                    onChange={(event) =>
+                                      setCompInput(event.target.value)
+                                    }
+                                    placeholder={employee.compensatoryRemainingDays.toFixed(
+                                      2,
+                                    )}
+                                  />
+                                </Field>
+                                <Button
+                                  size="sm"
+                                  onClick={handleSaveBalance}
+                                  disabled={isSavingBalance}
+                                >
+                                  {isSavingBalance ? "저장 중" : "저장"}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={closeBalanceEdit}
+                                  disabled={isSavingBalance}
+                                >
+                                  취소
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

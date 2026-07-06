@@ -85,12 +85,12 @@ export function LeaveDashboard() {
           title="대체휴무 잔여"
           value={
             workspace.compensatory
-              ? `${workspace.compensatory.remainingHours.toFixed(1)}시간`
+              ? `${workspace.compensatory.remainingDays.toFixed(2)}일`
               : "-"
           }
           detail={
             workspace.compensatory
-              ? `적립 ${workspace.compensatory.creditedHours}시간 · 사용 ${workspace.compensatory.usedHours}시간`
+              ? `적립 ${workspace.compensatory.creditedDays}일 · 사용 ${workspace.compensatory.usedDays}일`
               : "프로필 생성 후 표시"
           }
         />

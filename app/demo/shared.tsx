@@ -40,7 +40,7 @@ export const demoRequests = [
     id: "REQ-1019",
     type: "대체휴무",
     period: "7월 18일 - 7월 18일",
-    amount: "4시간",
+    amount: "0.5일",
     status: "승인",
     variant: "success" as const,
     approver: "박준호",
@@ -71,7 +71,7 @@ export const demoApprovalQueue = [
     department: "현장",
     type: "대체휴무",
     period: "7월 24일 - 7월 24일",
-    amount: "8시간",
+    amount: "1일",
   },
 ];
 
@@ -83,7 +83,7 @@ export const demoEmployees = [
     department: "총무",
     role: "admin",
     annual: "9.50일",
-    compensatory: "12.0시간",
+    compensatory: "1.50일",
     status: "active",
   },
   {
@@ -93,7 +93,7 @@ export const demoEmployees = [
     department: "운영",
     role: "employee",
     annual: "14.00일",
-    compensatory: "8.0시간",
+    compensatory: "1.00일",
     status: "active",
   },
   {
@@ -103,7 +103,7 @@ export const demoEmployees = [
     department: "현장",
     role: "approver",
     annual: "16.00일",
-    compensatory: "0.0시간",
+    compensatory: "0.00일",
     status: "active",
   },
 ];
@@ -340,7 +340,6 @@ export function DemoRequestForm() {
             <Field label="단위">
               <select className={selectClassName} defaultValue="day">
                 <option value="day">일</option>
-                <option value="hour">시간</option>
               </select>
             </Field>
           </div>
@@ -513,8 +512,8 @@ export function DashboardMetrics() {
       <MetricCard
         icon={Clock3}
         title="대체휴무 잔여"
-        value="12.0시간"
-        detail="적립 20시간 · 사용 8시간"
+        value="1.50일"
+        detail="적립 2.5일 · 사용 1일"
       />
       <MetricCard
         icon={Hourglass}
@@ -544,7 +543,7 @@ export function RequestMetrics() {
       <MetricCard
         icon={Clock3}
         title="대체휴무 잔여"
-        value="12.0시간"
+        value="1.50일"
         detail="적립분 우선 소진 권장"
       />
       <MetricCard
