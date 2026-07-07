@@ -2,7 +2,6 @@
 
 import { UserMenu } from "@/components/UserMenu";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Database, FileCheck2, type LucideIcon } from "lucide-react";
+import { FileCheck2, type LucideIcon } from "lucide-react";
 
 export const TYPE_LABELS: Record<string, string> = {
   annual: "연차",
@@ -59,13 +58,11 @@ export function ProductPage({
   eyebrow,
   title,
   viewer,
-  setupNeeded,
   children,
 }: {
   eyebrow: string;
   title: string;
   viewer: { name: string; role?: string };
-  setupNeeded?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -76,9 +73,7 @@ export function ProductPage({
           <h1 className="text-2xl font-semibold">{title}</h1>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant={setupNeeded ? "warning" : "success"}>
-            {setupNeeded ? "초기 설정 필요" : "실시간 동기화"}
-          </Badge>
+          <Badge variant="success">실시간 동기화</Badge>
           <UserMenu>{viewer.name}</UserMenu>
         </div>
       </header>
@@ -109,32 +104,6 @@ export function MetricCard({
       <CardContent>
         <div className="text-2xl font-semibold">{value}</div>
         <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function SetupCard({
-  isSeeding,
-  onSeed,
-}: {
-  isSeeding: boolean;
-  onSeed: () => void;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>초기 데이터 설정</CardTitle>
-        <CardDescription>
-          기본 정책과 예시 직원을 생성한 뒤 각 탭 기능을 바로 확인할 수
-          있습니다.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Button onClick={onSeed} disabled={isSeeding}>
-          <Database className="h-4 w-4" />
-          {isSeeding ? "생성 중" : "데모 데이터 생성"}
-        </Button>
       </CardContent>
     </Card>
   );

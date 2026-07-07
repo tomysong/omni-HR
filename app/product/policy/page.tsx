@@ -20,13 +20,11 @@ import {
   MetricCard,
   ProductPage,
   selectClassName,
-  SetupCard,
   todayString,
 } from "@/app/product/shared";
 
 export default function PolicyPage() {
   const [today] = useState(todayString);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [name, setName] = useState("");
   const [yearBasis, setYearBasis] = useState<"hireDate" | "fiscalYear">(
@@ -41,8 +39,7 @@ export default function PolicyPage() {
   const [secondNotice, setSecondNotice] = useState("2");
 
   const workspace = useQuery(api.leave.workspace, { today });
-  const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
-  const updateActivePolicy = useMutation(api.leave.updateActivePolicy);
+  const updateActivePolicy = useMutation(api.policy.updateActivePolicy);
 
   useEffect(() => {
     if (!workspace) {
@@ -66,15 +63,6 @@ export default function PolicyPage() {
       String(workspace.policy.promotionSecondNoticeMonthsBeforeExpiry),
     );
   }, [workspace]);
-
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      await ensureDemoWorkspace({ today });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -118,12 +106,7 @@ export default function PolicyPage() {
       eyebrow="연차·대체휴무 관리"
       title="정책"
       viewer={workspace.viewer}
-      setupNeeded={workspace.setupNeeded}
     >
-      {workspace.setupNeeded ? (
-        <SetupCard isSeeding={isSeeding} onSeed={handleSeed} />
-      ) : null}
-
       <section className="grid gap-4 sm:grid-cols-3">
         <MetricCard
           icon={Settings}

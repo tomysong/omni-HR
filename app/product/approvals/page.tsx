@@ -21,7 +21,6 @@ import {
   LoadingState,
   MetricCard,
   ProductPage,
-  SetupCard,
   TYPE_LABELS,
   formatDate,
   todayString,
@@ -29,24 +28,13 @@ import {
 
 export default function ApprovalsPage() {
   const [today] = useState(todayString);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [rejectionReasons, setRejectionReasons] = useState<
     Record<string, string>
   >({});
 
   const workspace = useQuery(api.leave.workspace, { today });
-  const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
   const decideRequest = useMutation(api.leave.decideRequest);
-
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      await ensureDemoWorkspace({ today });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   const handleDecision = async (
     requestId: Id<"leaveRequests">,
@@ -88,12 +76,7 @@ export default function ApprovalsPage() {
       eyebrow="연차·대체휴무 관리"
       title="승인"
       viewer={workspace.viewer}
-      setupNeeded={workspace.setupNeeded}
     >
-      {workspace.setupNeeded ? (
-        <SetupCard isSeeding={isSeeding} onSeed={handleSeed} />
-      ) : null}
-
       <section className="grid gap-4 sm:grid-cols-3">
         <MetricCard
           icon={CheckCheck}
@@ -123,9 +106,7 @@ export default function ApprovalsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {workspace.setupNeeded ? (
-            <EmptyState text="데모 데이터를 생성하면 승인 대기 목록이 채워집니다." />
-          ) : !canApprove ? (
+          {!canApprove ? (
             <EmptyState text="현재 계정은 승인 처리 권한이 없습니다." />
           ) : workspace.approvalQueue.length === 0 ? (
             <EmptyState text="처리할 신청이 없습니다." />

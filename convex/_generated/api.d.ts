@@ -9,9 +9,13 @@
  */
 
 import type * as ResendOTP from "../ResendOTP.js";
+import type * as access from "../access.js";
 import type * as auth from "../auth.js";
+import type * as employees from "../employees.js";
 import type * as http from "../http.js";
 import type * as leave from "../leave.js";
+import type * as model from "../model.js";
+import type * as policy from "../policy.js";
 import type * as users from "../users.js";
 
 import type {
@@ -22,9 +26,13 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ResendOTP: typeof ResendOTP;
+  access: typeof access;
   auth: typeof auth;
+  employees: typeof employees;
   http: typeof http;
   leave: typeof leave;
+  model: typeof model;
+  policy: typeof policy;
   users: typeof users;
 }>;
 

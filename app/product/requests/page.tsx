@@ -22,7 +22,6 @@ import {
   MetricCard,
   ProductPage,
   selectClassName,
-  SetupCard,
   STATUS_LABELS,
   STATUS_VARIANTS,
   TYPE_LABELS,
@@ -50,25 +49,14 @@ export default function RequestsPage() {
   const [unit, setUnit] = useState<"day" | "hour">(requestDefaults.annual.unit);
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   const workspace = useQuery(api.leave.workspace, { today });
   const createLeaveRequest = useMutation(api.leave.createLeaveRequest);
-  const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
 
   const handleTypeChange = (nextType: keyof typeof requestDefaults) => {
     setType(nextType);
     setAmount(requestDefaults[nextType].amount);
     setUnit(requestDefaults[nextType].unit);
-  };
-
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      await ensureDemoWorkspace({ today });
-    } finally {
-      setIsSeeding(false);
-    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -103,12 +91,7 @@ export default function RequestsPage() {
       eyebrow="연차·대체휴무 관리"
       title="신청"
       viewer={workspace.viewer}
-      setupNeeded={workspace.setupNeeded}
     >
-      {workspace.setupNeeded ? (
-        <SetupCard isSeeding={isSeeding} onSeed={handleSeed} />
-      ) : null}
-
       <section className="grid gap-4 sm:grid-cols-3">
         <MetricCard
           icon={CalendarDays}
@@ -151,10 +134,7 @@ export default function RequestsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {workspace.setupNeeded ? (
-              <EmptyState text="데모 데이터를 먼저 생성하면 신청 폼이 활성화됩니다." />
-            ) : (
-              <form className="space-y-4" onSubmit={handleSubmit}>
+            <form className="space-y-4" onSubmit={handleSubmit}>
                 <Field label="유형">
                   <select
                     className={selectClassName}
@@ -225,7 +205,6 @@ export default function RequestsPage() {
                   {isSubmitting ? "등록 중" : "신청 등록"}
                 </Button>
               </form>
-            )}
           </CardContent>
         </Card>
 

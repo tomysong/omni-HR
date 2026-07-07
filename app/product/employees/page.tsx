@@ -5,11 +5,13 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import {
   Building2,
+  Check,
   ShieldCheck,
   Settings2,
   Trash2,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { Fragment, FormEvent, useState } from "react";
 import { toast } from "sonner";
@@ -28,9 +30,10 @@ import {
   MetricCard,
   ProductPage,
   selectClassName,
-  SetupCard,
   todayString,
 } from "@/app/product/shared";
+
+type RoleValue = "employee" | "approver" | "admin" | "systemAdmin";
 
 export default function EmployeesPage() {
   const [today] = useState(todayString);
@@ -39,15 +42,12 @@ export default function EmployeesPage() {
   const [email, setEmail] = useState("");
   const [department, setDepartment] = useState("");
   const [title, setTitle] = useState("");
-  const [role, setRole] = useState<
-    "employee" | "approver" | "admin" | "systemAdmin"
-  >("employee");
+  const [role, setRole] = useState<RoleValue>("employee");
   const [hireDate, setHireDate] = useState(today);
   const [employmentStatus, setEmploymentStatus] = useState<
     "active" | "leaveOfAbsence" | "resigned"
   >("active");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [isClearingDemo, setIsClearingDemo] = useState(false);
   const [balanceEditId, setBalanceEditId] =
     useState<Id<"employeeProfiles"> | null>(null);
@@ -56,10 +56,20 @@ export default function EmployeesPage() {
   const [isSavingBalance, setIsSavingBalance] = useState(false);
 
   const workspace = useQuery(api.leave.workspace, { today });
-  const createEmployeeProfile = useMutation(api.leave.createEmployeeProfile);
-  const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
-  const clearDemoData = useMutation(api.leave.clearDemoData);
-  const setInitialBalance = useMutation(api.leave.setInitialBalance);
+  const createEmployeeProfile = useMutation(
+    api.employees.createEmployeeProfile,
+  );
+  const clearDemoData = useMutation(api.employees.clearDemoData);
+  const setInitialBalance = useMutation(api.employees.setInitialBalance);
+
+  const canManage =
+    workspace?.viewer.role === "admin" ||
+    workspace?.viewer.role === "systemAdmin";
+
+  const accessRequests = useQuery(
+    api.access.listAccessRequests,
+    canManage ? {} : "skip",
+  );
 
   const openBalanceEdit = (employeeId: Id<"employeeProfiles">) => {
     setBalanceEditId(employeeId);
@@ -98,15 +108,6 @@ export default function EmployeesPage() {
     }
   };
 
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      await ensureDemoWorkspace({ today });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   const handleClearDemoData = async () => {
     if (
       !window.confirm(
@@ -123,16 +124,14 @@ export default function EmployeesPage() {
       );
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "데모 데이터 삭제에 실패했습니다.",
+        error instanceof Error
+          ? error.message
+          : "데모 데이터 삭제에 실패했습니다.",
       );
     } finally {
       setIsClearingDemo(false);
     }
   };
-
-  const canManage =
-    workspace?.viewer.role === "admin" ||
-    workspace?.viewer.role === "systemAdmin";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -169,8 +168,10 @@ export default function EmployeesPage() {
     return <LoadingState />;
   }
 
-  const hasDemoData = workspace.employees.some((employee) =>
-    ["EMP-001", "EMP-002"].includes(employee.employeeNo),
+  const hasDemoData = workspace.employees.some(
+    (employee) =>
+      employee.employeeNo !== null &&
+      ["EMP-001", "EMP-002"].includes(employee.employeeNo),
   );
 
   const activeEmployees = workspace.employees.filter(
@@ -188,12 +189,7 @@ export default function EmployeesPage() {
       eyebrow="연차·대체휴무 관리"
       title="직원"
       viewer={workspace.viewer}
-      setupNeeded={workspace.setupNeeded}
     >
-      {workspace.setupNeeded ? (
-        <SetupCard isSeeding={isSeeding} onSeed={handleSeed} />
-      ) : null}
-
       <section className="grid gap-4 sm:grid-cols-3">
         <MetricCard
           icon={Users}
@@ -215,19 +211,21 @@ export default function EmployeesPage() {
         />
       </section>
 
+      {canManage ? (
+        <AccessRequestsCard requests={accessRequests} today={today} />
+      ) : null}
+
       <section className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <Card>
           <CardHeader>
             <CardTitle>직원 등록</CardTitle>
             <CardDescription>
-              관리자만 등록 가능합니다. 등록 시 기본 연차 부여 레코드도 함께
-              만듭니다.
+              계정 없이 직원 정보만 먼저 등록합니다. 계정 연결은 가입 승인으로
+              처리하세요.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {workspace.setupNeeded ? (
-              <EmptyState text="데모 데이터를 먼저 생성하면 등록 폼이 활성화됩니다." />
-            ) : !canManage ? (
+            {!canManage ? (
               <EmptyState text="현재 계정은 직원 등록 권한이 없습니다." />
             ) : (
               <form className="space-y-4" onSubmit={handleSubmit}>
@@ -290,13 +288,7 @@ export default function EmployeesPage() {
                       className={selectClassName}
                       value={role}
                       onChange={(event) =>
-                        setRole(
-                          event.target.value as
-                            | "employee"
-                            | "approver"
-                            | "admin"
-                            | "systemAdmin",
-                        )
+                        setRole(event.target.value as RoleValue)
                       }
                     >
                       <option value="employee">employee</option>
@@ -378,7 +370,7 @@ export default function EmployeesPage() {
                       <Fragment key={employee._id}>
                         <tr className="border-b last:border-0">
                           <td className="py-3 font-mono text-xs">
-                            {employee.employeeNo}
+                            {employee.employeeNo ?? "-"}
                           </td>
                           <td className="py-3">
                             <div className="font-medium">{employee.name}</div>
@@ -389,10 +381,14 @@ export default function EmployeesPage() {
                           <td className="py-3">{employee.department}</td>
                           <td className="py-3">{employee.role}</td>
                           <td className="py-3">
-                            {employee.annualRemainingDays.toFixed(2)}일
+                            {employee.annualRemainingDays === null
+                              ? "-"
+                              : `${employee.annualRemainingDays.toFixed(2)}일`}
                           </td>
                           <td className="py-3">
-                            {employee.compensatoryRemainingDays.toFixed(2)}일
+                            {employee.compensatoryRemainingDays === null
+                              ? "-"
+                              : `${employee.compensatoryRemainingDays.toFixed(2)}일`}
                           </td>
                           <td className="py-3">{employee.employmentStatus}</td>
                           {canManage ? (
@@ -426,9 +422,11 @@ export default function EmployeesPage() {
                                     onChange={(event) =>
                                       setAnnualInput(event.target.value)
                                     }
-                                    placeholder={employee.annualRemainingDays.toFixed(
-                                      2,
-                                    )}
+                                    placeholder={
+                                      employee.annualRemainingDays?.toFixed(
+                                        2,
+                                      ) ?? "0"
+                                    }
                                   />
                                 </Field>
                                 <Field label="대체휴무 초기 일수">
@@ -441,9 +439,11 @@ export default function EmployeesPage() {
                                     onChange={(event) =>
                                       setCompInput(event.target.value)
                                     }
-                                    placeholder={employee.compensatoryRemainingDays.toFixed(
-                                      2,
-                                    )}
+                                    placeholder={
+                                      employee.compensatoryRemainingDays?.toFixed(
+                                        2,
+                                      ) ?? "0"
+                                    }
                                   />
                                 </Field>
                                 <Button
@@ -475,6 +475,195 @@ export default function EmployeesPage() {
         </Card>
       </section>
     </ProductPage>
+  );
+}
+
+type AccessRequestItem = {
+  _id: Id<"accessRequests">;
+  name: string;
+  department: string;
+  title: string;
+  email: string | null;
+  createdAt: number;
+};
+
+function AccessRequestsCard({
+  requests,
+  today,
+}: {
+  requests: AccessRequestItem[] | undefined;
+  today: string;
+}) {
+  const decideAccess = useMutation(api.access.decideAccess);
+  const [forms, setForms] = useState<
+    Record<
+      string,
+      { employeeNo: string; hireDate: string; role: RoleValue; reason: string }
+    >
+  >({});
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+
+  const formFor = (id: string) =>
+    forms[id] ?? { employeeNo: "", hireDate: today, role: "employee" as const, reason: "" };
+
+  const setForm = (
+    id: string,
+    patch: Partial<{
+      employeeNo: string;
+      hireDate: string;
+      role: RoleValue;
+      reason: string;
+    }>,
+  ) => {
+    setForms((current) => ({
+      ...current,
+      [id]: { ...formFor(id), ...patch },
+    }));
+  };
+
+  const handleDecide = async (
+    requestId: Id<"accessRequests">,
+    decision: "approved" | "rejected",
+  ) => {
+    const form = formFor(requestId);
+    if (decision === "approved" && form.employeeNo.trim() === "") {
+      toast.error("승인하려면 사번을 입력해야 합니다.");
+      return;
+    }
+    setDecidingId(requestId);
+    try {
+      await decideAccess({
+        requestId,
+        decision,
+        employeeNo:
+          decision === "approved" ? form.employeeNo.trim() : undefined,
+        hireDate: decision === "approved" ? form.hireDate : undefined,
+        role: decision === "approved" ? form.role : undefined,
+        rejectionReason:
+          decision === "rejected" ? form.reason.trim() || undefined : undefined,
+      });
+      toast.success(
+        decision === "approved"
+          ? "가입을 승인했습니다."
+          : "가입을 반려했습니다.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "처리에 실패했습니다.",
+      );
+    } finally {
+      setDecidingId(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>가입 승인 대기</CardTitle>
+        <CardDescription>
+          회원가입 후 접근을 요청한 사용자입니다. 사번·입사일·권한을 지정해
+          승인하세요.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {requests === undefined ? (
+          <EmptyState text="불러오는 중입니다." />
+        ) : requests.length === 0 ? (
+          <EmptyState text="대기 중인 가입 요청이 없습니다." />
+        ) : (
+          <div className="flex flex-col gap-4">
+            {requests.map((request) => {
+              const form = formFor(request._id);
+              return (
+                <div
+                  key={request._id}
+                  className="rounded-md border p-4"
+                >
+                  <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium">{request.name}</span>
+                    <span className="text-muted-foreground">
+                      {request.department}
+                      {request.title ? ` · ${request.title}` : ""}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {request.email ?? "이메일 없음"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <Field label="사번">
+                      <Input
+                        className="w-32"
+                        value={form.employeeNo}
+                        onChange={(event) =>
+                          setForm(request._id, {
+                            employeeNo: event.target.value,
+                          })
+                        }
+                        placeholder="EMP-003"
+                      />
+                    </Field>
+                    <Field label="입사일">
+                      <Input
+                        type="date"
+                        className="w-40"
+                        value={form.hireDate}
+                        onChange={(event) =>
+                          setForm(request._id, { hireDate: event.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field label="권한">
+                      <select
+                        className={selectClassName + " w-36"}
+                        value={form.role}
+                        onChange={(event) =>
+                          setForm(request._id, {
+                            role: event.target.value as RoleValue,
+                          })
+                        }
+                      >
+                        <option value="employee">employee</option>
+                        <option value="approver">approver</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </Field>
+                    <Field label="반려 사유">
+                      <Input
+                        className="w-44"
+                        value={form.reason}
+                        onChange={(event) =>
+                          setForm(request._id, { reason: event.target.value })
+                        }
+                        placeholder="반려 시 입력"
+                      />
+                    </Field>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={decidingId === request._id}
+                        onClick={() => handleDecide(request._id, "approved")}
+                      >
+                        <Check className="h-4 w-4" />
+                        승인
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={decidingId === request._id}
+                        onClick={() => handleDecide(request._id, "rejected")}
+                      >
+                        <X className="h-4 w-4" />
+                        반려
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

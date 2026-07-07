@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { api } from "@/convex/_generated/api";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import {
   CalendarDays,
   CheckCheck,
@@ -27,7 +27,6 @@ import {
   LoadingState,
   MetricCard,
   ProductPage,
-  SetupCard,
   STATUS_LABELS,
   STATUS_VARIANTS,
   TYPE_LABELS,
@@ -37,18 +36,7 @@ import {
 
 export function LeaveDashboard() {
   const [today] = useState(todayString);
-  const [isSeeding, setIsSeeding] = useState(false);
   const workspace = useQuery(api.leave.workspace, { today });
-  const ensureDemoWorkspace = useMutation(api.leave.ensureDemoWorkspace);
-
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      await ensureDemoWorkspace({ today });
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   if (workspace === undefined) {
     return <LoadingState />;
@@ -59,12 +47,7 @@ export function LeaveDashboard() {
       eyebrow="연차·대체휴무 관리"
       title="내 대시보드"
       viewer={workspace.viewer}
-      setupNeeded={workspace.setupNeeded}
     >
-      {workspace.setupNeeded ? (
-        <SetupCard isSeeding={isSeeding} onSeed={handleSeed} />
-      ) : null}
-
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           icon={CalendarDays}

@@ -114,6 +114,24 @@ export default defineSchema({
     createdByProfileId: v.id("employeeProfiles"),
     createdAt: v.number(),
   }).index("by_employee", ["employeeProfileId"]),
+  accessRequests: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    department: v.string(),
+    title: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    ),
+    rejectionReason: v.optional(v.string()),
+    decidedByProfileId: v.optional(v.id("employeeProfiles")),
+    decidedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
   auditLogs: defineTable({
     actorProfileId: v.optional(v.id("employeeProfiles")),
     entityTable: v.string(),
