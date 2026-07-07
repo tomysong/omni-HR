@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import {
   CalendarDays,
+  CalendarPlus,
   CheckCheck,
   ClipboardList,
   Home,
@@ -16,6 +17,7 @@ import type { ReactNode } from "react";
 const menuItems = [
   { href: "/product", label: "대시보드", icon: CalendarDays },
   { href: "/product/requests", label: "신청", icon: ClipboardList },
+  { href: "/product/holiday-work", label: "휴일근무", icon: CalendarPlus },
   { href: "/product/employees", label: "직원", icon: Users },
   { href: "/product/policy", label: "정책", icon: Settings },
   { href: "/product/approvals", label: "승인", icon: CheckCheck },

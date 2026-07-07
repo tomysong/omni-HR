@@ -114,6 +114,32 @@ export default defineSchema({
     createdByProfileId: v.id("employeeProfiles"),
     createdAt: v.number(),
   }).index("by_employee", ["employeeProfileId"]),
+  holidays: defineTable({
+    date: v.string(),
+    name: v.string(),
+    createdByProfileId: v.optional(v.id("employeeProfiles")),
+    createdAt: v.number(),
+  }).index("by_date", ["date"]),
+  holidayWorkRecords: defineTable({
+    employeeProfileId: v.id("employeeProfiles"),
+    workDate: v.string(),
+    amountDays: v.number(),
+    note: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+    ),
+    rejectionReason: v.optional(v.string()),
+    reportedByProfileId: v.id("employeeProfiles"),
+    approverProfileId: v.optional(v.id("employeeProfiles")),
+    decidedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_employee", ["employeeProfileId"])
+    .index("by_status", ["status"])
+    .index("by_employee_date", ["employeeProfileId", "workDate"]),
   accessRequests: defineTable({
     userId: v.id("users"),
     name: v.string(),

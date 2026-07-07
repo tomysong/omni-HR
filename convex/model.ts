@@ -139,6 +139,34 @@ export function requireValidDate(value: string, label: string) {
   }
 }
 
+// 한국 시간(KST, UTC+9) 기준 오늘 날짜
+export function kstToday() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function weekendName(date: string): string | null {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  if (day === 6) return "토요일";
+  if (day === 0) return "일요일";
+  return null;
+}
+
+// 휴일 판정: 토/일 + holidays 테이블(정부 지정 공휴일, 관리자 추가분 포함)
+export async function holidayInfo(ctx: AppCtx, date: string) {
+  const weekend = weekendName(date);
+  if (weekend !== null) {
+    return { isHoliday: true, kind: "weekend" as const, name: weekend };
+  }
+  const row = await ctx.db
+    .query("holidays")
+    .withIndex("by_date", (q) => q.eq("date", date))
+    .first();
+  if (row !== null) {
+    return { isHoliday: true, kind: "public" as const, name: row.name };
+  }
+  return { isHoliday: false, kind: null, name: null };
+}
+
 // ---------- leave calculation ----------
 
 export function annualGrantForHireDate(hireDate: string, referenceYear: number) {
