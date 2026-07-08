@@ -1,7 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   DEFAULT_POLICY,
+  LEAVE_TYPE_LABELS,
   MAX_REQUEST_AMOUNT_DAYS,
   activePolicy,
   annualBalance,
@@ -9,6 +11,7 @@ import {
   canManage,
   compensatoryBalance,
   consumeCompensatoryDays,
+  emailForProfile,
   employeeSummary,
   enrichRequests,
   isAnnualType,
@@ -21,6 +24,10 @@ import {
   round2,
   yearFromDate,
 } from "./model";
+
+function isMultipleOf(value: number, step: number) {
+  return Math.abs(value / step - Math.round(value / step)) < 0.000001;
+}
 
 export const workspace = query({
   args: { today: v.string() },
@@ -128,6 +135,20 @@ export const createLeaveRequest = mutation({
       throw new Error("사유는 500자 이내로 입력해야 합니다.");
     }
 
+    const policy = (await activePolicy(ctx)) ?? DEFAULT_POLICY;
+    if (args.type === "quarterAnnual" && !policy.allowQuarterDay) {
+      throw new Error("현재 정책에서는 반반차를 신청할 수 없습니다.");
+    }
+    if (
+      isAnnualType(args.type) &&
+      !isMultipleOf(args.amount, policy.allowQuarterDay ? 0.25 : 0.5)
+    ) {
+      throw new Error("현재 정책에서 허용되지 않는 휴가 수량입니다.");
+    }
+    if (args.type === "compensatory" && !isMultipleOf(args.amount, 0.5)) {
+      throw new Error("대체휴무는 0.5일 단위로 신청할 수 있습니다.");
+    }
+
     const year = yearFromDate(args.startDate);
     if (isAnnualType(args.type)) {
       const balance = await annualBalance(ctx, profile._id, year);
@@ -209,6 +230,27 @@ export const decideRequest = mutation({
       decidedAt: now,
       updatedAt: now,
     });
+
+    // 결재 결과를 신청 직원 이메일로 통지 (스케줄된 액션 — 실패해도 결재는 유효)
+    const employee = await ctx.db.get(request.employeeProfileId);
+    if (employee !== null) {
+      const to = await emailForProfile(ctx, employee);
+      if (to !== null) {
+        await ctx.scheduler.runAfter(0, internal.email.sendLeaveDecision, {
+          to,
+          employeeName: employee.name,
+          typeLabel: LEAVE_TYPE_LABELS[request.type] ?? request.type,
+          startDate: request.startDate,
+          endDate: request.endDate,
+          amount: request.amount,
+          unit: request.unit,
+          decision,
+          rejectionReason:
+            decision === "rejected" ? rejectionReason : undefined,
+          approverName: approver.name,
+        });
+      }
+    }
 
     await logAudit(
       ctx,

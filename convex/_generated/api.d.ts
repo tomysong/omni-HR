@@ -11,6 +11,7 @@
 import type * as ResendOTP from "../ResendOTP.js";
 import type * as access from "../access.js";
 import type * as auth from "../auth.js";
+import type * as email from "../email.js";
 import type * as employees from "../employees.js";
 import type * as holidayWork from "../holidayWork.js";
 import type * as holidays from "../holidays.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   ResendOTP: typeof ResendOTP;
   access: typeof access;
   auth: typeof auth;
+  email: typeof email;
   employees: typeof employees;
   holidayWork: typeof holidayWork;
   holidays: typeof holidays;

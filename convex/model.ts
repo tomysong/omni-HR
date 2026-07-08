@@ -33,6 +33,33 @@ export const employmentStatus = v.union(
 
 const ANNUAL_TYPES = ["annual", "halfAnnual", "quarterAnnual"] as const;
 
+// 서버 측 유형 라벨 (이메일 등 알림 본문용). 클라이언트 TYPE_LABELS와 동일하게 유지.
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
+  annual: "연차",
+  halfAnnual: "반차",
+  quarterAnnual: "반반차",
+  compensatory: "대체휴무",
+  bereavement: "경조사",
+  sick: "병가",
+  official: "공가",
+  unpaid: "무급",
+};
+
+// 프로필 이메일이 없으면 연결된 로그인 계정 이메일로 폴백
+export async function emailForProfile(
+  ctx: AppCtx,
+  profile: Doc<"employeeProfiles">,
+): Promise<string | null> {
+  if (profile.email) {
+    return profile.email;
+  }
+  if (profile.userId) {
+    const user = await ctx.db.get(profile.userId);
+    return user?.email ?? null;
+  }
+  return null;
+}
+
 // 관리자 수동 입력값 상한 (오입력 방어)
 export const MAX_ANNUAL_DAYS = 50;
 export const MAX_COMPENSATORY_DAYS = 30;
@@ -132,16 +159,35 @@ export function isAnnualType(type: string) {
 }
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function requireValidDate(value: string, label: string) {
-  if (!DATE_PATTERN.test(value) || Number.isNaN(new Date(value).getTime())) {
+  if (!DATE_PATTERN.test(value)) {
+    throw new Error(`${label} 형식이 올바르지 않습니다. (YYYY-MM-DD)`);
+  }
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
     throw new Error(`${label} 형식이 올바르지 않습니다. (YYYY-MM-DD)`);
   }
 }
 
 // 한국 시간(KST, UTC+9) 기준 오늘 날짜
 export function kstToday() {
-  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return kstDateForTimestamp(Date.now());
+}
+
+export function kstDateForTimestamp(timestamp: number) {
+  return new Date(timestamp + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+export function kstDateAfterDays(timestamp: number, days: number) {
+  return kstDateForTimestamp(timestamp + days * DAY_MS);
 }
 
 export function weekendName(date: string): string | null {
@@ -169,13 +215,18 @@ export async function holidayInfo(ctx: AppCtx, date: string) {
 
 // ---------- leave calculation ----------
 
-export function annualGrantForHireDate(hireDate: string, referenceYear: number) {
+export function annualGrantForHireDate(
+  hireDate: string,
+  referenceYear: number,
+  annualLeaveCapDays: number = DEFAULT_POLICY.annualLeaveCapDays,
+) {
   const hireYear = yearFromDate(hireDate);
   const tenureYears = Math.max(referenceYear - hireYear, 0);
+  const capped = (days: number) => Math.min(days, annualLeaveCapDays);
   if (tenureYears === 0) {
-    return 11;
+    return capped(11);
   }
-  return Math.min(15 + Math.floor(Math.max(tenureYears - 1, 0) / 2), 25);
+  return capped(15 + Math.floor(Math.max(tenureYears - 1, 0) / 2));
 }
 
 export async function annualBalance(
@@ -226,20 +277,43 @@ export async function compensatoryBalance(
   ctx: AppCtx,
   employeeProfileId: Id<"employeeProfiles">,
 ) {
-  const credits = await ctx.db
-    .query("compensatoryCredits")
-    .withIndex("by_employee", (q) =>
-      q.eq("employeeProfileId", employeeProfileId),
-    )
-    .collect();
+  const [credits, requests] = await Promise.all([
+    ctx.db
+      .query("compensatoryCredits")
+      .withIndex("by_employee", (q) =>
+        q.eq("employeeProfileId", employeeProfileId),
+      )
+      .collect(),
+    ctx.db
+      .query("leaveRequests")
+      .withIndex("by_employee", (q) =>
+        q.eq("employeeProfileId", employeeProfileId),
+      )
+      .collect(),
+  ]);
 
-  const creditedDays = credits.reduce(
+  const today = kstToday();
+  const activeCredits = credits.filter(
+    (credit) => credit.expiresOn === null || credit.expiresOn >= today,
+  );
+
+  const creditedDays = activeCredits.reduce(
     (sum, credit) => sum + credit.creditedDays,
     0,
   );
-  const usedDays = credits.reduce((sum, credit) => sum + credit.usedDays, 0);
+  const usedDays = activeCredits.reduce(
+    (sum, credit) => sum + credit.usedDays,
+    0,
+  );
+  const pendingDays = requests
+    .filter(
+      (request) =>
+        request.status === "pending" && request.type === "compensatory",
+    )
+    .reduce((sum, request) => sum + request.amount, 0);
   const nextExpiry =
-    credits
+    activeCredits
+      .filter((credit) => credit.creditedDays - credit.usedDays > 0)
       .map((credit) => credit.expiresOn)
       .filter((expiresOn): expiresOn is string => expiresOn !== null)
       .sort((a, b) => a.localeCompare(b))[0] ?? null;
@@ -247,7 +321,8 @@ export async function compensatoryBalance(
   return {
     creditedDays: round2(creditedDays),
     usedDays: round2(usedDays),
-    remainingDays: round2(creditedDays - usedDays),
+    pendingDays: round2(pendingDays),
+    remainingDays: round2(creditedDays - usedDays - pendingDays),
     nextExpiry,
   };
 }
@@ -258,6 +333,7 @@ export async function consumeCompensatoryDays(
   days: number,
 ) {
   let remaining = days;
+  const today = kstToday();
   const credits = await ctx.db
     .query("compensatoryCredits")
     .withIndex("by_employee", (q) =>
@@ -265,7 +341,18 @@ export async function consumeCompensatoryDays(
     )
     .collect();
 
-  for (const credit of credits) {
+  const consumableCredits = credits
+    .filter((credit) => credit.expiresOn === null || credit.expiresOn >= today)
+    .sort((a, b) => {
+      if (a.expiresOn === b.expiresOn) {
+        return a.createdAt - b.createdAt;
+      }
+      if (a.expiresOn === null) return 1;
+      if (b.expiresOn === null) return -1;
+      return a.expiresOn.localeCompare(b.expiresOn);
+    });
+
+  for (const credit of consumableCredits) {
     if (remaining <= 0) {
       break;
     }
@@ -384,9 +471,8 @@ export async function employeeSummary(
     employmentStatus: employee.employmentStatus,
     annualRemainingDays: annual.remainingDays as number | null,
     compensatoryRemainingDays: compensatory.remainingDays as number | null,
-    pendingRequests: requests.filter(
-      (request) => request.status === "pending",
-    ).length as number | null,
+    pendingRequests: requests.filter((request) => request.status === "pending")
+      .length as number | null,
   };
 }
 
